@@ -1,4 +1,4 @@
-# @zerowallet/adapter
+# zerowallet-adapter@1.0.0
 
 [![npm version](https://img.shields.io/npm/v/@zerowallet/adapter.svg)](https://www.npmjs.com/package/@zerowallet/adapter)
 
