@@ -1,6 +1,6 @@
 # zerowallet-adapter@1.0.0
 
-[![npm version](https://img.shields.io/npm/v/@zerowallet/adapter.svg)](https://www.npmjs.com/package/@zerowallet/adapter)
+[![npm version](https://img.shields.io/npm/v/zerowallet-adapter.svg)](https://www.npmjs.com/package/zerowallet-adapter)
 
 Zero Wallet Adapter is the official Solana Wallet Adapter SDK for **Zero Wallet**, a self-custody mobile wallet native to Solana. 
 
