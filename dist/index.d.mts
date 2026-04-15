@@ -39,7 +39,7 @@ interface ZeroWalletAdapterConfig {
     /**
      * Network cluster.
      */
-    network?: 'mainnet-beta' | 'devnet' | 'testnet';
+    network?: 'mainnet-beta' | 'devnet' | 'testnet' | string;
     /**
      * Timeout for deep link callbacks in milliseconds. Defaults to 120000 (2 minutes).
      */
@@ -48,10 +48,14 @@ interface ZeroWalletAdapterConfig {
      * The callback scheme/host your dApp is listening on. e.g., "my-dapp://callback"
      */
     callbackUrl?: string;
+    /**
+     * Custom scheme prefix for development with Expo Go (e.g., 'exp://192.168.1.5:8081/--/')
+     */
+    deepLinkPrefix?: string;
 }
 
 declare const ZeroWalletName: WalletName<"Zero Wallet">;
-declare const ZeroWalletIcon = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEwIi8+PHBhdGggZD0iTTE2LjUgNy41QzE2Ljc1IDcuNSA5IDIwIDkuNSAyMEw3LjUgMTYuNUM3LjI1IDE2LjUgMTUgNCAxNC41IDRMMTYuNSA3LjVaIiBmaWxsPSJibGFjayIvPjwvc3ZnPg==";
+declare const ZeroWalletIcon = "https://i.ibb.co/wxHdJgv/applogo.jpg";
 interface ZeroWalletAdapterEvents {
     connect(publicKey: PublicKey): void;
     disconnect(): void;
@@ -81,22 +85,34 @@ declare class ZeroWalletAdapter extends BaseMessageSignerWalletAdapter {
 /**
  * Builds the URL to connect to the Zero Wallet mobile app deep link.
  */
-declare function buildConnectUrl(callbackUrl: string, id: string): string;
+declare function buildConnectUrl(callbackUrl: string, id: string, scheme?: string): string;
 /**
  * Builds the deep link URL to request signing a single transaction.
  */
-declare function buildSignTransactionUrl(serializedTxBase64: string, callbackUrl: string, id: string, network?: string): string;
+declare function buildSignTransactionUrl(serializedTxBase64: string, callbackUrl: string, id: string, network?: string, scheme?: string): string;
 /**
  * Builds the deep link URL to request signing multiple transactions.
  */
-declare function buildSignAllUrl(serializedTxsBase64: string[], callbackUrl: string, id: string, network?: string): string;
+declare function buildSignAllUrl(serializedTxsBase64: string[], callbackUrl: string, id: string, network?: string, scheme?: string): string;
 /**
  * Builds the deep link URL to request signing a raw message.
  */
-declare function buildSignMessageUrl(messageBase64: string, callbackUrl: string, id: string): string;
+declare function buildSignMessageUrl(messageBase64: string, callbackUrl: string, id: string, scheme?: string): string;
 /**
- * Attempts to open the deep link using window.location.href.
+ * Opens a deep link URL. Uses window.location.href which triggers
+ * onShouldStartLoadWithRequest in React Native WebView — allowing the
+ * host app to intercept the custom scheme and handle it natively.
+ *
+ * If running strictly inside a React Native WebView context, we use
+ * postMessage instead to bypass Android's unreliable Intent firing on window.location.href.
  */
+declare global {
+    interface Window {
+        ReactNativeWebView?: {
+            postMessage(msg: string): void;
+        };
+    }
+}
 declare function openDeepLink(url: string): void;
 /**
  * Detects if the current user agent is mobile.

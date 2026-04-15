@@ -52,7 +52,8 @@ export function encodeBase64(data: Uint8Array): string {
         const binString = Array.from(data, (byte) => String.fromCharCode(byte)).join('');
         return btoa(binString);
     }
-    return Buffer.from(data).toString('base64');
+    const BufferLocal = (typeof globalThis !== 'undefined' ? globalThis : global) as any;
+    return BufferLocal.Buffer.from(data).toString('base64');
 }
 
 /**
@@ -63,7 +64,8 @@ export function decodeBase64(data: string): Uint8Array {
         const binString = atob(data);
         return new Uint8Array(binString.split('').map((char) => char.charCodeAt(0)));
     }
-    return new Uint8Array(Buffer.from(data, 'base64'));
+    const BufferLocal = (typeof globalThis !== 'undefined' ? globalThis : global) as any;
+    return new Uint8Array(BufferLocal.Buffer.from(data, 'base64'));
 }
 
 /**

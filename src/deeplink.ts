@@ -7,38 +7,55 @@ const ZERO_WALLET_SCHEME = 'zerowallet://';
 /**
  * Builds the URL to connect to the Zero Wallet mobile app deep link.
  */
-export function buildConnectUrl(callbackUrl: string, id: string): string {
-    return `${ZERO_WALLET_SCHEME}connect?callback=${encodeURIComponent(callbackUrl)}&id=${id}`;
+export function buildConnectUrl(callbackUrl: string, id: string, scheme: string = ZERO_WALLET_SCHEME): string {
+    return `${scheme}connect?callback=${encodeURIComponent(callbackUrl)}&id=${id}`;
 }
 
 /**
  * Builds the deep link URL to request signing a single transaction.
  */
-export function buildSignTransactionUrl(serializedTxBase64: string, callbackUrl: string, id: string, network: string = 'mainnet-beta'): string {
-    return `${ZERO_WALLET_SCHEME}sign?tx=${encodeURIComponent(serializedTxBase64)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}&network=${network}`;
+export function buildSignTransactionUrl(serializedTxBase64: string, callbackUrl: string, id: string, network: string = 'mainnet-beta', scheme: string = ZERO_WALLET_SCHEME): string {
+    return `${scheme}sign?tx=${encodeURIComponent(serializedTxBase64)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}&network=${network}`;
 }
 
 /**
  * Builds the deep link URL to request signing multiple transactions.
  */
-export function buildSignAllUrl(serializedTxsBase64: string[], callbackUrl: string, id: string, network: string = 'mainnet-beta'): string {
+export function buildSignAllUrl(serializedTxsBase64: string[], callbackUrl: string, id: string, network: string = 'mainnet-beta', scheme: string = ZERO_WALLET_SCHEME): string {
     const serializedPayload = JSON.stringify(serializedTxsBase64); // JSON array of base64 strings
-    return `${ZERO_WALLET_SCHEME}signAll?txs=${encodeURIComponent(serializedPayload)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}&network=${network}`;
+    return `${scheme}signAll?txs=${encodeURIComponent(serializedPayload)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}&network=${network}`;
 }
 
 /**
  * Builds the deep link URL to request signing a raw message.
  */
-export function buildSignMessageUrl(messageBase64: string, callbackUrl: string, id: string): string {
-    return `${ZERO_WALLET_SCHEME}signMessage?msg=${encodeURIComponent(messageBase64)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}`;
+export function buildSignMessageUrl(messageBase64: string, callbackUrl: string, id: string, scheme: string = ZERO_WALLET_SCHEME): string {
+    return `${scheme}signMessage?msg=${encodeURIComponent(messageBase64)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}`;
 }
 
 /**
- * Attempts to open the deep link using window.location.href.
+ * Opens a deep link URL. Uses window.location.href which triggers
+ * onShouldStartLoadWithRequest in React Native WebView — allowing the
+ * host app to intercept the custom scheme and handle it natively.
+ * 
+ * If running strictly inside a React Native WebView context, we use
+ * postMessage instead to bypass Android's unreliable Intent firing on window.location.href.
  */
+declare global {
+    interface Window {
+        ReactNativeWebView?: {
+            postMessage(msg: string): void;
+        };
+    }
+}
+
 export function openDeepLink(url: string): void {
     if (typeof window !== 'undefined') {
-        window.location.href = url;
+        if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'deeplink', url }));
+        } else {
+            window.location.href = url;
+        }
     }
 }
 
@@ -71,25 +88,55 @@ export function waitForCallback(
 ): Promise<URLSearchParams> {
     return new Promise((resolve, reject) => {
         let timeoutId: NodeJS.Timeout;
+        let intervalId: NodeJS.Timeout;
 
-        // Note: For deep links, true "waiting" like this only works if the dApp is in a container
-        // that handles the URL return without reloading, or uses a specific communication bridge.
-        // For external browsers, the return callback will act as a page navigation to the dApp's callback URL.
+        // Custom event listener for smooth in-app browser resolution
+        const handleCustomEvent = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            const detail = customEvent.detail;
+            if (detail && detail.id === expectedId) {
+                clearTimeout(timeoutId);
+                clearInterval(intervalId);
+                if (typeof window !== 'undefined') {
+                    window.removeEventListener('zerowallet_callback', handleCustomEvent);
+                }
+
+                // Convert detail object to URLSearchParams for backward compatibility
+                const params = new URLSearchParams();
+                for (const key in detail) {
+                    if (detail[key] !== undefined && detail[key] !== null) {
+                        params.append(key, detail[key]);
+                    }
+                }
+                resolve(params);
+            }
+        };
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('zerowallet_callback', handleCustomEvent);
+        }
+
         const checkUrl = () => {
             if (typeof window === 'undefined') return;
             const params = new URLSearchParams(window.location.search);
             if (params.get('id') === expectedId) {
                 clearTimeout(timeoutId);
                 clearInterval(intervalId);
+                if (typeof window !== 'undefined') {
+                    window.removeEventListener('zerowallet_callback', handleCustomEvent);
+                }
                 resolve(params);
             }
         };
 
-        const intervalId = setInterval(checkUrl, 1000); // Check every second
+        intervalId = setInterval(checkUrl, 1000); // Check every second
         checkUrl(); // check initially
 
         timeoutId = setTimeout(() => {
             clearInterval(intervalId);
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('zerowallet_callback', handleCustomEvent);
+            }
             reject(new ZeroWalletTimeoutError('Deep link response timed out.'));
         }, timeoutMs);
     });

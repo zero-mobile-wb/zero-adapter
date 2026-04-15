@@ -77,14 +77,16 @@ function encodeBase64(data) {
     const binString = Array.from(data, (byte) => String.fromCharCode(byte)).join("");
     return btoa(binString);
   }
-  return Buffer.from(data).toString("base64");
+  const BufferLocal = typeof globalThis !== "undefined" ? globalThis : global;
+  return BufferLocal.Buffer.from(data).toString("base64");
 }
 function decodeBase64(data) {
   if (typeof atob !== "undefined") {
     const binString = atob(data);
     return new Uint8Array(binString.split("").map((char) => char.charCodeAt(0)));
   }
-  return new Uint8Array(Buffer.from(data, "base64"));
+  const BufferLocal = typeof globalThis !== "undefined" ? globalThis : global;
+  return new Uint8Array(BufferLocal.Buffer.from(data, "base64"));
 }
 function generateCallbackId() {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -104,22 +106,26 @@ function isAndroid() {
 
 // src/deeplink.ts
 var ZERO_WALLET_SCHEME = "zerowallet://";
-function buildConnectUrl(callbackUrl, id) {
-  return `${ZERO_WALLET_SCHEME}connect?callback=${encodeURIComponent(callbackUrl)}&id=${id}`;
+function buildConnectUrl(callbackUrl, id, scheme = ZERO_WALLET_SCHEME) {
+  return `${scheme}connect?callback=${encodeURIComponent(callbackUrl)}&id=${id}`;
 }
-function buildSignTransactionUrl(serializedTxBase64, callbackUrl, id, network = "mainnet-beta") {
-  return `${ZERO_WALLET_SCHEME}sign?tx=${encodeURIComponent(serializedTxBase64)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}&network=${network}`;
+function buildSignTransactionUrl(serializedTxBase64, callbackUrl, id, network = "mainnet-beta", scheme = ZERO_WALLET_SCHEME) {
+  return `${scheme}sign?tx=${encodeURIComponent(serializedTxBase64)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}&network=${network}`;
 }
-function buildSignAllUrl(serializedTxsBase64, callbackUrl, id, network = "mainnet-beta") {
+function buildSignAllUrl(serializedTxsBase64, callbackUrl, id, network = "mainnet-beta", scheme = ZERO_WALLET_SCHEME) {
   const serializedPayload = JSON.stringify(serializedTxsBase64);
-  return `${ZERO_WALLET_SCHEME}signAll?txs=${encodeURIComponent(serializedPayload)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}&network=${network}`;
+  return `${scheme}signAll?txs=${encodeURIComponent(serializedPayload)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}&network=${network}`;
 }
-function buildSignMessageUrl(messageBase64, callbackUrl, id) {
-  return `${ZERO_WALLET_SCHEME}signMessage?msg=${encodeURIComponent(messageBase64)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}`;
+function buildSignMessageUrl(messageBase64, callbackUrl, id, scheme = ZERO_WALLET_SCHEME) {
+  return `${scheme}signMessage?msg=${encodeURIComponent(messageBase64)}&callback=${encodeURIComponent(callbackUrl)}&id=${id}`;
 }
 function openDeepLink(url) {
   if (typeof window !== "undefined") {
-    window.location.href = url;
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "deeplink", url }));
+    } else {
+      window.location.href = url;
+    }
   }
 }
 function isMobile() {
@@ -132,19 +138,47 @@ function isZeroWalletInstalled() {
 function waitForCallback(expectedId, timeoutMs = 12e4) {
   return new Promise((resolve, reject) => {
     let timeoutId;
+    let intervalId;
+    const handleCustomEvent = (event) => {
+      const customEvent = event;
+      const detail = customEvent.detail;
+      if (detail && detail.id === expectedId) {
+        clearTimeout(timeoutId);
+        clearInterval(intervalId);
+        if (typeof window !== "undefined") {
+          window.removeEventListener("zerowallet_callback", handleCustomEvent);
+        }
+        const params = new URLSearchParams();
+        for (const key in detail) {
+          if (detail[key] !== void 0 && detail[key] !== null) {
+            params.append(key, detail[key]);
+          }
+        }
+        resolve(params);
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("zerowallet_callback", handleCustomEvent);
+    }
     const checkUrl = () => {
       if (typeof window === "undefined") return;
       const params = new URLSearchParams(window.location.search);
       if (params.get("id") === expectedId) {
         clearTimeout(timeoutId);
         clearInterval(intervalId);
+        if (typeof window !== "undefined") {
+          window.removeEventListener("zerowallet_callback", handleCustomEvent);
+        }
         resolve(params);
       }
     };
-    const intervalId = setInterval(checkUrl, 1e3);
+    intervalId = setInterval(checkUrl, 1e3);
     checkUrl();
     timeoutId = setTimeout(() => {
       clearInterval(intervalId);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("zerowallet_callback", handleCustomEvent);
+      }
       reject(new ZeroWalletTimeoutError("Deep link response timed out."));
     }, timeoutMs);
   });
@@ -178,7 +212,7 @@ function parseCallbackParams(params) {
 
 // src/adapter.ts
 var ZeroWalletName = "Zero Wallet";
-var ZeroWalletIcon = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEwIi8+PHBhdGggZD0iTTE2LjUgNy41QzE2Ljc1IDcuNSA5IDIwIDkuNSAyMEw3LjUgMTYuNUM3LjI1IDE2LjUgMTUgNCAxNC41IDRMMTYuNSA3LjVaIiBmaWxsPSJibGFjayIvPjwvc3ZnPg==";
+var ZeroWalletIcon = "https://i.ibb.co/wxHdJgv/applogo.jpg";
 var ZeroWalletAdapter = class extends BaseMessageSignerWalletAdapter {
   constructor(config = {}) {
     super();
@@ -206,11 +240,18 @@ var ZeroWalletAdapter = class extends BaseMessageSignerWalletAdapter {
     }
     if (typeof window !== "undefined") {
       try {
-        const storedKey = localStorage.getItem("zerowallet_pubkey");
-        if (storedKey) {
-          this._publicKey = new PublicKey(storedKey);
+        const params = new URLSearchParams(window.location.search);
+        const status = params.get("status");
+        const returnedPubKey = params.get("publicKey");
+        if (status === "approved" && returnedPubKey) {
+          this._publicKey = new PublicKey(returnedPubKey);
+          localStorage.setItem("zerowallet_pubkey", returnedPubKey);
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
           setTimeout(() => {
-            if (this._publicKey) this.emit("connect", this._publicKey);
+            if (this._publicKey) {
+              this.emit("connect", this._publicKey);
+            }
           }, 0);
         }
       } catch (e) {

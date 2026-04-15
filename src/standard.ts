@@ -1,7 +1,7 @@
 import { SolanaSignAndSendTransactionFeature, SolanaSignAndSendTransactionMethod, SolanaSignMessageFeature, SolanaSignMessageMethod, SolanaSignTransactionFeature, SolanaSignTransactionMethod } from '@solana/wallet-standard-features';
 import { Wallet, WalletAccount, WalletIcon } from '@wallet-standard/core';
 import { ZeroWalletAdapter, ZeroWalletIcon, ZeroWalletName } from './adapter';
-import { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { PublicKey, Transaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { StandardConnectFeature, StandardConnectMethod, StandardDisconnectFeature, StandardDisconnectMethod, StandardEventsFeature, StandardEventsListeners, StandardEventsNames, StandardEventsOnMethod } from '@wallet-standard/features';
 

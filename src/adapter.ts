@@ -46,7 +46,7 @@ import bs58 from 'bs58';
 export const ZeroWalletName = 'Zero Wallet' as WalletName<'Zero Wallet'>;
 
 // Simple clean SVG icon base64 encoded
-export const ZeroWalletIcon = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjEwIi8+PHBhdGggZD0iTTE2LjUgNy41QzE2Ljc1IDcuNSA5IDIwIDkuNSAyMEw3LjUgMTYuNUM3LjI1IDE2LjUgMTUgNCAxNC41IDRMMTYuNSA3LjVaIiBmaWxsPSJibGFjayIvPjwvc3ZnPg==';
+export const ZeroWalletIcon = 'https://i.ibb.co/wxHdJgv/applogo.jpg';
 
 export interface ZeroWalletAdapterEvents {
     connect(publicKey: PublicKey): void;
@@ -90,19 +90,35 @@ export class ZeroWalletAdapter extends BaseMessageSignerWalletAdapter {
             }
         }
 
-        // Try to recover session from local storage
+        // Handle URL-param-based session restore (for desktop/redirect flow where the
+        // page actually navigates to the callback URL with status=approved).
+        // NOTE: We do NOT silently restore from localStorage — that bypasses the
+        // AdapterConnectScreen modal and auto-connects without user interaction.
+        // The in-app WebView flow uses a CustomEvent injection instead (never touches
+        // window.location), so this block only fires on real page-reload redirects.
         if (typeof window !== 'undefined') {
             try {
-                const storedKey = localStorage.getItem('zerowallet_pubkey');
-                if (storedKey) {
-                    this._publicKey = new PublicKey(storedKey);
+                const params = new URLSearchParams(window.location.search);
+                const status = params.get('status');
+                const returnedPubKey = params.get('publicKey');
+
+                if (status === 'approved' && returnedPubKey) {
+                    this._publicKey = new PublicKey(returnedPubKey);
+                    localStorage.setItem('zerowallet_pubkey', returnedPubKey);
+
+                    // Clean up URL so polling interval doesn't re-resolve stale params
+                    const cleanUrl = window.location.origin + window.location.pathname;
+                    window.history.replaceState({}, document.title, cleanUrl);
+
                     // Emit connect on next tick so listeners have time to attach
                     setTimeout(() => {
-                        if (this._publicKey) this.emit('connect', this._publicKey);
+                        if (this._publicKey) {
+                            this.emit('connect', this._publicKey);
+                        }
                     }, 0);
                 }
             } catch (e) {
-                // Ignore storage errors
+                // Ignore storage/URL errors
             }
         }
     }

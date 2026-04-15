@@ -41,7 +41,7 @@ export interface ZeroWalletAdapterConfig {
     /**
      * Network cluster.
      */
-    network?: 'mainnet-beta' | 'devnet' | 'testnet';
+    network?: 'mainnet-beta' | 'devnet' | 'testnet' | string;
     /**
      * Timeout for deep link callbacks in milliseconds. Defaults to 120000 (2 minutes).
      */
@@ -50,4 +50,8 @@ export interface ZeroWalletAdapterConfig {
      * The callback scheme/host your dApp is listening on. e.g., "my-dapp://callback"
      */
     callbackUrl?: string;
+    /**
+     * Custom scheme prefix for development with Expo Go (e.g., 'exp://192.168.1.5:8081/--/')
+     */
+    deepLinkPrefix?: string;
 }
